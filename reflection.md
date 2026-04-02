@@ -5,7 +5,29 @@
 **a. Initial design**
 
 - Briefly describe your initial UML design.
+
+    The system is built around four classes: `Owner`, `Pet`, `Task`, and `Scheduler`.
+
+    - `Owner` holds the pet owner's basic info and their available time per day — the top-level constraint driving the schedule.
+    - `Pet` belongs to an owner and holds a list of care tasks specific to that pet.
+    - `Task` represents a single care action (walk, feeding, medication, grooming, etc.) with a duration, priority, optional time window, and a recurring flag for daily repeats like meals or meds.
+    - `Scheduler` takes an owner (and all their pets' tasks), applies priority and time-budget constraints, and produces an ordered daily plan with a plain-language explanation.
+
+    **Three core user actions the system supports:**
+
+    1. **Add a pet** — the owner registers a pet by providing its name, species, age, and energy level. The pet is linked to the owner and starts with an empty task list.
+
+    2. **Add/schedule a task** — the owner attaches a care task to a specific pet. Each task has a title, category (walk, feeding, medication, etc.), duration in minutes, a priority level (low, medium, or high), and an optional time window. Tasks can be marked as recurring (e.g., daily feedings).
+
+    3. **Generate today's schedule** — the scheduler collects all tasks across the owner's pets, sorts them by priority, and greedily fits them within the owner's available time budget. It returns an ordered list of scheduled tasks, flags any that were skipped due to time constraints, and produces a plain-language explanation of the plan.
+
 - What classes did you include, and what responsibilities did you assign to each?
+
+    - **`Owner`** — top-level entity holding the owner's basic info and `available_minutes_per_day`, which is the core scheduling constraint. Manages the list of pets.
+    - **`Pet`** — linked to an owner. Stores attributes like name, species, age, and energy level. Responsible for holding and retrieving that pet's care tasks.
+    - **`Task`** — represents one care action (walk, feeding, medication, grooming, etc.). Holds `duration_minutes`, `priority`, `time_window`, `is_recurring`, and `completed` — everything the scheduler needs to reason about a task.
+    - **`Scheduler`** — the algorithmic core. Takes an owner and all their pets' tasks, sorts by priority, fits tasks within the time budget, and produces an ordered daily plan via `build_schedule()`, `detect_conflicts()`, and `explain_plan()`.
+
 
 **b. Design changes**
 
