@@ -13,6 +13,7 @@ class Task:
     is_recurring: bool = False
     recurrence_interval: Optional[str] = None  # "daily" | "weekly"
     completed: bool = False
+    pet_name: Optional[str] = None       # set when task is added to a pet
 
     def mark_complete(self) -> None:
         pass
@@ -48,6 +49,9 @@ class Owner:
 
     def get_all_tasks(self) -> list[Task]:
         pass
+
+
+PRIORITY_ORDER = {"high": 3, "medium": 2, "low": 1}
 
 
 class Scheduler:
