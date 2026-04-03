@@ -20,8 +20,13 @@ The three core user actions the system supports are:
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+Yes, three changes were made after reviewing the initial skeleton:
+
+1. **Added `pet_name` to `Task`** — the initial design had `Pet` holding a list of `Task` objects, but a `Task` had no reference back to which pet it belonged to. Once the `Scheduler` collects all tasks across all pets, that context is lost. Adding `pet_name` as an optional attribute (set automatically when `add_task()` is called) means the scheduler can label tasks correctly in the plan output (e.g. *"Walk — Mochi, 20 min"*).
+
+2. **Added a `PRIORITY_ORDER` mapping** — `priority` was stored as a plain string (`"low"` / `"medium"` / `"high"`). Sorting strings alphabetically gives the wrong order (`"high" < "low" < "medium"`). A module-level dictionary `{"high": 3, "medium": 2, "low": 1}` gives `build_schedule()` a correct numeric sort key.
+
+3. **Changed `Scheduler` from `@dataclass` to a plain class** — the initial stub used `@dataclass` for all four classes. `Scheduler` is a poor fit for dataclass because its key attributes (`scheduled_tasks`, `skipped_tasks`, `time_budget_minutes`) are derived state, not constructor inputs. A plain class with an explicit `__init__` is cleaner and clearer.
 
 ---
 
