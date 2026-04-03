@@ -16,9 +16,11 @@ class Task:
     pet_name: Optional[str] = None       # set when task is added to a pet
 
     def mark_complete(self) -> None:
+        """Mark this task as done."""
         self.completed = True
 
     def is_high_priority(self) -> bool:
+        """Return True if this task's priority is high."""
         return self.priority == "high"
 
 
@@ -31,10 +33,12 @@ class Pet:
     tasks: list[Task] = field(default_factory=list)
 
     def add_task(self, task: Task) -> None:
+        """Attach a task to this pet, stamping the pet's name onto it."""
         task.pet_name = self.name
         self.tasks.append(task)
 
     def get_tasks_by_priority(self) -> list[Task]:
+        """Return this pet's tasks sorted from highest to lowest priority."""
         return sorted(self.tasks, key=lambda t: PRIORITY_ORDER.get(t.priority, 0), reverse=True)
 
 
@@ -46,9 +50,11 @@ class Owner:
     pets: list[Pet] = field(default_factory=list)
 
     def add_pet(self, pet: Pet) -> None:
+        """Register a pet under this owner."""
         self.pets.append(pet)
 
     def get_all_tasks(self) -> list[Task]:
+        """Return a flat list of every task across all owned pets."""
         all_tasks = []
         for pet in self.pets:
             all_tasks.extend(pet.tasks)
@@ -66,6 +72,7 @@ class Scheduler:
         self.skipped_tasks: list[Task] = []
 
     def build_schedule(self) -> list[Task]:
+        """Sort all tasks by priority and greedily fit them within the time budget."""
         self.scheduled_tasks = []
         self.skipped_tasks = []
         all_tasks = self.owner.get_all_tasks()
@@ -80,6 +87,7 @@ class Scheduler:
         return self.scheduled_tasks
 
     def detect_conflicts(self) -> list[tuple]:
+        """Return pairs of scheduled tasks that share the same time window."""
         conflicts = []
         windowed = [t for t in self.scheduled_tasks if t.time_window is not None]
         for i in range(len(windowed)):
@@ -89,12 +97,13 @@ class Scheduler:
         return conflicts
 
     def explain_plan(self) -> str:
+        """Return a plain-language summary of scheduled and skipped tasks."""
         if not self.scheduled_tasks:
             return "No tasks were scheduled."
         lines = [f"Schedule for {self.owner.name} ({self.get_total_time()} min total):\n"]
         for task in self.scheduled_tasks:
             pet_label = f" [{task.pet_name}]" if task.pet_name else ""
-            window = f" — {task.time_window}" if task.time_window else ""
+            window = f" -- {task.time_window}" if task.time_window else ""
             lines.append(f"  [+] {task.title}{pet_label} ({task.duration_minutes} min, {task.priority} priority{window})")
         if self.skipped_tasks:
             lines.append("\nSkipped (insufficient time):")
@@ -104,4 +113,5 @@ class Scheduler:
         return "\n".join(lines)
 
     def get_total_time(self) -> int:
+        """Return the total minutes of all scheduled tasks."""
         return sum(t.duration_minutes for t in self.scheduled_tasks)
