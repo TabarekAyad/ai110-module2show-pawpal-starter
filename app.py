@@ -39,16 +39,33 @@ At minimum, your system should:
 
 st.divider()
 
-st.subheader("Quick Demo Inputs (UI only)")
-owner_name = st.text_input("Owner name", value="Jordan")
-pet_name = st.text_input("Pet name", value="Mochi")
-species = st.selectbox("Species", ["dog", "cat", "other"])
+# --- Owner + Pet setup ---
+st.subheader("Owner & Pet Info")
 
+col_o1, col_o2 = st.columns(2)
+with col_o1:
+    owner_name = st.text_input("Owner name", value="Jordan")
+    available_minutes = st.number_input("Available minutes/day", min_value=10, max_value=480, value=90)
+with col_o2:
+    pet_name = st.text_input("Pet name", value="Mochi")
+    species = st.selectbox("Species", ["dog", "cat", "other"])
+
+# Initialise the Owner in session_state once; reuse it on every subsequent rerun.
+# Without this guard, a fresh Owner (with no pets/tasks) would be created on every click.
+if "owner" not in st.session_state:
+    st.session_state.owner = Owner(
+        name=owner_name,
+        email="",
+        available_minutes_per_day=available_minutes,
+    )
+    pet = Pet(name=pet_name, species=species, age_years=1, energy_level="medium")
+    st.session_state.owner.add_pet(pet)
+
+owner: Owner = st.session_state.owner
+pet: Pet = owner.pets[0]
+
+# --- Task entry ---
 st.markdown("### Tasks")
-st.caption("Add a few tasks. In your final version, these should feed into your scheduler.")
-
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -59,31 +76,34 @@ with col3:
     priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
 
 if st.button("Add task"):
-    st.session_state.tasks.append(
-        {"title": task_title, "duration_minutes": int(duration), "priority": priority}
-    )
+    pet.add_task(Task(
+        title=task_title,
+        category="general",
+        duration_minutes=int(duration),
+        priority=priority,
+    ))
 
-if st.session_state.tasks:
+all_tasks = owner.get_all_tasks()
+if all_tasks:
     st.write("Current tasks:")
-    st.table(st.session_state.tasks)
+    st.table([
+        {"title": t.title, "duration (min)": t.duration_minutes, "priority": t.priority, "pet": t.pet_name}
+        for t in all_tasks
+    ])
 else:
     st.info("No tasks yet. Add one above.")
 
 st.divider()
 
 st.subheader("Build Schedule")
-st.caption("This button should call your scheduling logic once you implement it.")
 
 if st.button("Generate schedule"):
-    st.warning(
-        "Not implemented yet. Next step: create your scheduling logic (classes/functions) and call it here."
-    )
-    st.markdown(
-        """
-Suggested approach:
-1. Design your UML (draft).
-2. Create class stubs (no logic).
-3. Implement scheduling behavior.
-4. Connect your scheduler here and display results.
-"""
-    )
+    scheduler = Scheduler(owner)
+    scheduler.build_schedule()
+    st.success("Schedule generated!")
+    st.text(scheduler.explain_plan())
+    conflicts = scheduler.detect_conflicts()
+    if conflicts:
+        st.warning(f"{len(conflicts)} time window conflict(s) detected:")
+        for a, b in conflicts:
+            st.write(f"  - '{a.title}' and '{b.title}' both during '{a.time_window}'")
