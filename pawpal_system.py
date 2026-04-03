@@ -55,10 +55,16 @@ class Owner:
 
     def get_all_tasks(self) -> list[Task]:
         """Return a flat list of every task across all owned pets."""
-        all_tasks = []
-        for pet in self.pets:
-            all_tasks.extend(pet.tasks)
-        return all_tasks
+        return [task for pet in self.pets for task in pet.tasks]
+
+    def filter_tasks(self, pet_name: str | None = None, completed: bool | None = None) -> list[Task]:
+        """Return tasks optionally filtered by pet name and/or completion status."""
+        tasks = self.get_all_tasks()
+        if pet_name is not None:
+            tasks = [t for t in tasks if t.pet_name == pet_name]
+        if completed is not None:
+            tasks = [t for t in tasks if t.completed == completed]
+        return tasks
 
 
 PRIORITY_ORDER = {"high": 3, "medium": 2, "low": 1}
@@ -72,11 +78,16 @@ class Scheduler:
         self.skipped_tasks: list[Task] = []
 
     def build_schedule(self) -> list[Task]:
-        """Sort all tasks by priority and greedily fit them within the time budget."""
+        """Sort incomplete tasks by priority (then shortest-first on ties) and greedily fit within budget."""
         self.scheduled_tasks = []
         self.skipped_tasks = []
-        all_tasks = self.owner.get_all_tasks()
-        sorted_tasks = sorted(all_tasks, key=lambda t: PRIORITY_ORDER.get(t.priority, 0), reverse=True)
+        # Only schedule tasks that haven't been completed yet
+        pending = self.owner.filter_tasks(completed=False)
+        # Primary: highest priority first. Tie-break: shortest duration first (fits more tasks)
+        sorted_tasks = sorted(
+            pending,
+            key=lambda t: (-PRIORITY_ORDER.get(t.priority, 0), t.duration_minutes)
+        )
         time_used = 0
         for task in sorted_tasks:
             if time_used + task.duration_minutes <= self.time_budget_minutes:
@@ -86,14 +97,46 @@ class Scheduler:
                 self.skipped_tasks.append(task)
         return self.scheduled_tasks
 
+    def sort_tasks_by_time(self) -> list[Task]:
+        """Return scheduled tasks ordered by time window (windowed tasks first, then the rest)."""
+        windowed = [t for t in self.scheduled_tasks if t.time_window is not None]
+        unwindowed = [t for t in self.scheduled_tasks if t.time_window is None]
+        return sorted(windowed, key=lambda t: t.time_window) + unwindowed
+
+    def reset_recurring_tasks(self) -> None:
+        """Reset completion status on all recurring tasks so they re-enter the next day's schedule."""
+        for task in self.owner.get_all_tasks():
+            if task.is_recurring:
+                task.completed = False
+
+    def _parse_window(self, window: str) -> tuple[int, int] | None:
+        """Parse a 'HH:MM-HH:MM' string into (start_min, end_min). Returns None if unparseable."""
+        try:
+            start_str, end_str = window.split("-")
+            def to_min(t: str) -> int:
+                h, m = t.strip().split(":")
+                return int(h) * 60 + int(m)
+            return to_min(start_str), to_min(end_str)
+        except Exception:
+            return None
+
     def detect_conflicts(self) -> list[tuple]:
-        """Return pairs of scheduled tasks that share the same time window."""
+        """Return pairs of scheduled tasks whose time windows overlap."""
         conflicts = []
         windowed = [t for t in self.scheduled_tasks if t.time_window is not None]
         for i in range(len(windowed)):
             for j in range(i + 1, len(windowed)):
-                if windowed[i].time_window == windowed[j].time_window:
-                    conflicts.append((windowed[i], windowed[j]))
+                a, b = windowed[i], windowed[j]
+                a_range = self._parse_window(a.time_window)
+                b_range = self._parse_window(b.time_window)
+                if a_range and b_range:
+                    # Numeric overlap: two ranges overlap if one starts before the other ends
+                    if a_range[0] < b_range[1] and b_range[0] < a_range[1]:
+                        conflicts.append((a, b))
+                else:
+                    # Fall back to string equality for labels like "morning" / "evening"
+                    if a.time_window == b.time_window:
+                        conflicts.append((a, b))
         return conflicts
 
     def explain_plan(self) -> str:
