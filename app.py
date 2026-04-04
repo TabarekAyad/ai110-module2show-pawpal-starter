@@ -110,15 +110,26 @@ else:
             st.session_state.task_form_v += 1
             st.rerun()
 
-    all_tasks = owner.get_all_tasks()
-    if all_tasks:
-        st.write("**All tasks:**")
+    st.markdown("**Filter tasks**")
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        filter_pet = st.selectbox("By pet", ["All"] + [p.name for p in owner.pets], key="filter_pet")
+    with col_f2:
+        filter_status = st.selectbox("By status", ["All", "Pending", "Completed"], key="filter_status")
+
+    pet_filter = None if filter_pet == "All" else filter_pet
+    status_filter = None if filter_status == "All" else (filter_status == "Completed")
+    filtered = owner.filter_tasks(pet_name=pet_filter, completed=status_filter)
+
+    if filtered:
+        st.write("**Tasks:**")
         st.table([
-            {"pet": t.pet_name, "task": t.title, "duration (min)": t.duration_minutes, "priority": t.priority}
-            for t in all_tasks
+            {"pet": t.pet_name, "task": t.title, "duration (min)": t.duration_minutes,
+             "priority": t.priority, "done": t.completed}
+            for t in filtered
         ])
     else:
-        st.info("No tasks yet. Add one above.")
+        st.info("No tasks match the current filter.")
 
 # ---------------------------------------------------------------------------
 # Section 4: Generate schedule  →  calls Scheduler.build_schedule()
