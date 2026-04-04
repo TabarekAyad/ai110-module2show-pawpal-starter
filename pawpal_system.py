@@ -98,10 +98,15 @@ class Scheduler:
         return self.scheduled_tasks
 
     def sort_tasks_by_time(self) -> list[Task]:
-        """Return scheduled tasks ordered by time window (windowed tasks first, then the rest)."""
+        """Return scheduled tasks ordered by start time (HH:MM), with unwindowed tasks appended last."""
         windowed = [t for t in self.scheduled_tasks if t.time_window is not None]
         unwindowed = [t for t in self.scheduled_tasks if t.time_window is None]
-        return sorted(windowed, key=lambda t: t.time_window) + unwindowed
+        # Sort by parsed start minute so "09:00-10:00" comes before "14:00-15:00".
+        # Tasks with unparseable windows (e.g. "morning") fall back to 0 and sort first.
+        return sorted(
+            windowed,
+            key=lambda t: (self._parse_window(t.time_window) or (0, 0))[0]
+        ) + unwindowed
 
     def reset_recurring_tasks(self) -> None:
         """Reset completion status on all recurring tasks so they re-enter the next day's schedule."""
