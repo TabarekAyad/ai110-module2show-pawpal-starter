@@ -108,16 +108,20 @@ else:
             st.warning("Please select how often this task repeats.")
         else:
             target_pet = next(p for p in owner.pets if p.name == selected_pet_name)
-            target_pet.add_task(Task(
-                title=task_title.strip(),
-                category="general",
-                duration_minutes=int(duration),
-                priority=priority,
-                is_recurring=is_recurring,
-                recurrence_interval=recurrence_interval if is_recurring else None,
-            ))
-            st.session_state.task_form_v += 1
-            st.rerun()
+            existing_titles = [t.title.lower() for t in target_pet.tasks]
+            if task_title.strip().lower() in existing_titles:
+                st.warning(f"'{task_title.strip()}' already exists for {selected_pet_name}. Duplicate tasks are not allowed.")
+            else:
+                target_pet.add_task(Task(
+                    title=task_title.strip(),
+                    category="general",
+                    duration_minutes=int(duration),
+                    priority=priority,
+                    is_recurring=is_recurring,
+                    recurrence_interval=recurrence_interval if is_recurring else None,
+                ))
+                st.session_state.task_form_v += 1
+                st.rerun()
 
     st.markdown("**Filter tasks**")
     col_f1, col_f2 = st.columns(2)
@@ -158,11 +162,10 @@ if "scheduler" in st.session_state:
     scheduler: Scheduler = st.session_state.scheduler
     st.success(f"Schedule built — {scheduler.get_total_time()} min planned.")
 
-    conflicts = scheduler.detect_conflicts()
-    if conflicts:
-        st.warning(f"{len(conflicts)} time window conflict(s):")
-        for a, b in conflicts:
-            st.write(f"  - '{a.title}' and '{b.title}' both during '{a.time_window}'")
+    warnings = scheduler.conflict_warnings()
+    if warnings:
+        for w in warnings:
+            st.warning(w)
 
     st.markdown("**Mark tasks complete:**")
     for i, task in enumerate(scheduler.scheduled_tasks):

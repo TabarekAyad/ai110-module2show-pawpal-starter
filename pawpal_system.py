@@ -182,6 +182,16 @@ class Scheduler:
                         conflicts.append((a, b))
         return conflicts
 
+    def conflict_warnings(self) -> list[str]:
+        """Return a list of plain-language warning strings for every detected conflict. Empty list = no conflicts."""
+        warnings = []
+        for a, b in self.detect_conflicts():
+            warnings.append(
+                f"WARNING: '{a.title}' [{a.pet_name}] and '{b.title}' [{b.pet_name}] "
+                f"overlap at {a.time_window} / {b.time_window}"
+            )
+        return warnings
+
     def explain_plan(self) -> str:
         """Return a plain-language summary of scheduled and skipped tasks."""
         if not self.scheduled_tasks:
