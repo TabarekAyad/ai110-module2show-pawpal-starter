@@ -23,6 +23,20 @@ class Task:
         """Return True if this task's priority is high."""
         return self.priority == "high"
 
+    def next_occurrence(self) -> Task:
+        """Return a fresh copy of this recurring task with completed reset to False."""
+        return Task(
+            title=self.title,
+            category=self.category,
+            duration_minutes=self.duration_minutes,
+            priority=self.priority,
+            time_window=self.time_window,
+            is_recurring=self.is_recurring,
+            recurrence_interval=self.recurrence_interval,
+            completed=False,
+            pet_name=self.pet_name,
+        )
+
 
 @dataclass
 class Pet:
@@ -107,6 +121,14 @@ class Scheduler:
             windowed,
             key=lambda t: (self._parse_window(t.time_window) or (0, 0))[0]
         ) + unwindowed
+
+    def complete_task(self, task: Task) -> None:
+        """Mark a task complete. If it is recurring, add the next occurrence to its pet."""
+        task.mark_complete()
+        if task.is_recurring and task.pet_name:
+            pet = next((p for p in self.owner.pets if p.name == task.pet_name), None)
+            if pet:
+                pet.add_task(task.next_occurrence())
 
     def reset_recurring_tasks(self) -> None:
         """Reset completion status on all recurring tasks so they re-enter the next day's schedule."""

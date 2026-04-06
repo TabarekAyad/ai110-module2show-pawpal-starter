@@ -94,11 +94,18 @@ else:
             duration = st.number_input("Duration (min)", min_value=0, max_value=240, value=None, placeholder="e.g. 20")
         with col3:
             priority = st.selectbox("Priority", ["", "low", "medium", "high"])
+        col4, col5 = st.columns(2)
+        with col4:
+            is_recurring = st.checkbox("Recurring task")
+        with col5:
+            recurrence_interval = st.selectbox("Repeat", ["", "daily", "weekly"])
         submitted_task = st.form_submit_button("Add task")
 
     if submitted_task:
         if not selected_pet_name or not task_title.strip() or not duration or not priority:
             st.warning("Please fill in all task fields.")
+        elif is_recurring and not recurrence_interval:
+            st.warning("Please select how often this task repeats.")
         else:
             target_pet = next(p for p in owner.pets if p.name == selected_pet_name)
             target_pet.add_task(Task(
@@ -106,6 +113,8 @@ else:
                 category="general",
                 duration_minutes=int(duration),
                 priority=priority,
+                is_recurring=is_recurring,
+                recurrence_interval=recurrence_interval if is_recurring else None,
             ))
             st.session_state.task_form_v += 1
             st.rerun()
@@ -143,10 +152,24 @@ if st.button("Generate schedule"):
     else:
         scheduler = Scheduler(owner)
         scheduler.build_schedule()
-        st.success(f"Schedule built — {scheduler.get_total_time()} min planned.")
-        st.text(scheduler.explain_plan())
-        conflicts = scheduler.detect_conflicts()
-        if conflicts:
-            st.warning(f"{len(conflicts)} time window conflict(s):")
-            for a, b in conflicts:
-                st.write(f"  - '{a.title}' and '{b.title}' both during '{a.time_window}'")
+        st.session_state.scheduler = scheduler
+
+if "scheduler" in st.session_state:
+    scheduler: Scheduler = st.session_state.scheduler
+    st.success(f"Schedule built — {scheduler.get_total_time()} min planned.")
+
+    conflicts = scheduler.detect_conflicts()
+    if conflicts:
+        st.warning(f"{len(conflicts)} time window conflict(s):")
+        for a, b in conflicts:
+            st.write(f"  - '{a.title}' and '{b.title}' both during '{a.time_window}'")
+
+    st.markdown("**Mark tasks complete:**")
+    for i, task in enumerate(scheduler.scheduled_tasks):
+        label = f"{task.title} [{task.pet_name}] — {task.duration_minutes} min, {task.priority}"
+        if task.is_recurring:
+            label += f" (repeats {task.recurrence_interval})"
+        checked = st.checkbox(label, value=task.completed, key=f"task_done_{i}")
+        if checked and not task.completed:
+            scheduler.complete_task(task)
+            st.rerun()
