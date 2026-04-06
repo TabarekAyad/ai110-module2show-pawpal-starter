@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from typing import Optional
 
 
@@ -14,6 +15,7 @@ class Task:
     recurrence_interval: Optional[str] = None  # "daily" | "weekly"
     completed: bool = False
     pet_name: Optional[str] = None       # set when task is added to a pet
+    due_date: Optional[date] = None
 
     def mark_complete(self) -> None:
         """Mark this task as done."""
@@ -24,7 +26,20 @@ class Task:
         return self.priority == "high"
 
     def next_occurrence(self) -> Task:
-        """Return a fresh copy of this recurring task with completed reset to False."""
+        """Return a fresh copy of this recurring task with completed reset to False.
+
+        The due_date of the new task is calculated using timedelta:
+          - "daily"  -> date.today() + timedelta(days=1)
+          - "weekly" -> date.today() + timedelta(weeks=1)
+          - anything else -> None
+        """
+        if self.recurrence_interval == "daily":
+            next_due = date.today() + timedelta(days=1)
+        elif self.recurrence_interval == "weekly":
+            next_due = date.today() + timedelta(weeks=1)
+        else:
+            next_due = None
+
         return Task(
             title=self.title,
             category=self.category,
@@ -35,6 +50,7 @@ class Task:
             recurrence_interval=self.recurrence_interval,
             completed=False,
             pet_name=self.pet_name,
+            due_date=next_due,
         )
 
 
