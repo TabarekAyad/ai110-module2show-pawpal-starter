@@ -5,7 +5,7 @@ st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 st.title("PawPal+")
 
 # ---------------------------------------------------------------------------
-# Section 1: Owner setup — collect name + time before creating the Owner object
+# Section 1: Owner setup
 # ---------------------------------------------------------------------------
 st.subheader("Owner")
 
@@ -36,6 +36,10 @@ if "pet_form_v" not in st.session_state:
     st.session_state.pet_form_v = 0
 if "task_form_v" not in st.session_state:
     st.session_state.task_form_v = 0
+if "editing_pet" not in st.session_state:
+    st.session_state.editing_pet = None
+if "editing_task" not in st.session_state:
+    st.session_state.editing_task = None  # (pet_name, task_title)
 
 col1, col2 = st.columns(2)
 with col1:
@@ -44,10 +48,10 @@ with col2:
     st.write(f"**Available time:** {owner.available_minutes_per_day} min/day")
 
 # ---------------------------------------------------------------------------
-# Section 2: Add a pet  →  calls owner.add_pet()
+# Section 2: Pets — add, edit, delete
 # ---------------------------------------------------------------------------
 st.divider()
-st.subheader("Add a Pet")
+st.subheader("Pets")
 
 with st.form(f"add_pet_form_{st.session_state.pet_form_v}"):
     col_a, col_b, col_c = st.columns(3)
@@ -62,8 +66,8 @@ with st.form(f"add_pet_form_{st.session_state.pet_form_v}"):
 if submitted_pet:
     if not new_pet_name.strip() or not new_species or not new_energy:
         st.warning("Please fill in all pet fields.")
-    elif new_pet_name in [p.name for p in owner.pets]:
-        st.warning(f"A pet named '{new_pet_name}' already exists.")
+    elif new_pet_name.strip() in [p.name for p in owner.pets]:
+        st.warning(f"A pet named '{new_pet_name.strip()}' already exists.")
     else:
         owner.add_pet(Pet(name=new_pet_name.strip(), species=new_species, age_years=1, energy_level=new_energy))
         st.session_state.pet_form_v += 1
@@ -71,15 +75,58 @@ if submitted_pet:
 
 if owner.pets:
     st.write("**Your pets:**")
-    st.table([{"name": p.name, "species": p.species, "energy": p.energy_level} for p in owner.pets])
+    for pet in owner.pets:
+        col_name, col_info, col_edit, col_del = st.columns([2, 3, 1, 1])
+        with col_name:
+            st.write(f"**{pet.name}**")
+        with col_info:
+            st.write(f"{pet.species} · {pet.energy_level} energy")
+        with col_edit:
+            if st.button("Edit", key=f"edit_pet_{pet.name}"):
+                st.session_state.editing_pet = pet.name
+        with col_del:
+            if st.button("Delete", key=f"del_pet_{pet.name}"):
+                owner.pets = [p for p in owner.pets if p.name != pet.name]
+                if st.session_state.editing_pet == pet.name:
+                    st.session_state.editing_pet = None
+                st.rerun()
+
+    if st.session_state.editing_pet:
+        pet = next((p for p in owner.pets if p.name == st.session_state.editing_pet), None)
+        if pet:
+            st.markdown(f"**Editing pet: {pet.name}**")
+            with st.form(f"edit_pet_form_{pet.name}"):
+                species_opts = ["dog", "cat", "other"]
+                energy_opts = ["low", "medium", "high"]
+                new_name_e = st.text_input("Name", value=pet.name)
+                new_species_e = st.selectbox("Species", species_opts, index=species_opts.index(pet.species) if pet.species in species_opts else 0)
+                new_energy_e = st.selectbox("Energy level", energy_opts, index=energy_opts.index(pet.energy_level) if pet.energy_level in energy_opts else 0)
+                save_pet = st.form_submit_button("Save changes")
+                cancel_pet = st.form_submit_button("Cancel")
+            if save_pet:
+                new_name_e = new_name_e.strip()
+                if not new_name_e:
+                    st.warning("Pet name cannot be empty.")
+                elif new_name_e != pet.name and new_name_e in [p.name for p in owner.pets]:
+                    st.warning(f"A pet named '{new_name_e}' already exists.")
+                else:
+                    # Update pet_name on all tasks belonging to this pet
+                    for t in pet.tasks:
+                        t.pet_name = new_name_e
+                    pet.name = new_name_e
+                    st.session_state.editing_pet = None
+                    st.rerun()
+            if cancel_pet:
+                st.session_state.editing_pet = None
+                st.rerun()
 else:
     st.info("No pets yet. Add one above.")
 
 # ---------------------------------------------------------------------------
-# Section 3: Add a task  →  calls pet.add_task()
+# Section 3: Tasks — add, edit, delete
 # ---------------------------------------------------------------------------
 st.divider()
-st.subheader("Add a Task")
+st.subheader("Tasks")
 
 if not owner.pets:
     st.info("Add a pet first before scheduling tasks.")
@@ -123,6 +170,7 @@ else:
                 st.session_state.task_form_v += 1
                 st.rerun()
 
+    # --- Filter ---
     st.markdown("**Filter tasks**")
     col_f1, col_f2 = st.columns(2)
     with col_f1:
@@ -136,16 +184,54 @@ else:
 
     if filtered:
         st.write("**Tasks:**")
-        st.table([
-            {"pet": t.pet_name, "task": t.title, "duration (min)": t.duration_minutes,
-             "priority": t.priority, "done": t.completed}
-            for t in filtered
-        ])
+        for task in filtered:
+            pet_obj = next((p for p in owner.pets if p.name == task.pet_name), None)
+            col_t, col_info, col_edit, col_del = st.columns([2, 4, 1, 1])
+            with col_t:
+                st.write(f"**{task.title}**")
+            with col_info:
+                recur = f" · repeats {task.recurrence_interval}" if task.is_recurring else ""
+                st.write(f"{task.pet_name} · {task.duration_minutes} min · {task.priority}{recur}")
+            with col_edit:
+                if st.button("Edit", key=f"edit_task_{task.pet_name}_{task.title}"):
+                    st.session_state.editing_task = (task.pet_name, task.title)
+            with col_del:
+                if st.button("Delete", key=f"del_task_{task.pet_name}_{task.title}"):
+                    if pet_obj:
+                        pet_obj.tasks = [t for t in pet_obj.tasks if t.title != task.title]
+                    st.rerun()
+
+        if st.session_state.editing_task:
+            e_pet_name, e_task_title = st.session_state.editing_task
+            e_pet = next((p for p in owner.pets if p.name == e_pet_name), None)
+            e_task = next((t for t in e_pet.tasks if t.title == e_task_title), None) if e_pet else None
+            if e_task:
+                st.markdown(f"**Editing task: {e_task.title} [{e_pet_name}]**")
+                priority_opts = ["low", "medium", "high"]
+                with st.form(f"edit_task_form_{e_pet_name}_{e_task_title}"):
+                    new_title_e = st.text_input("Title", value=e_task.title)
+                    new_dur_e = st.number_input("Duration (min)", min_value=1, max_value=240, value=e_task.duration_minutes)
+                    new_pri_e = st.selectbox("Priority", priority_opts, index=priority_opts.index(e_task.priority) if e_task.priority in priority_opts else 0)
+                    new_recur_e = st.checkbox("Recurring", value=e_task.is_recurring)
+                    new_interval_e = st.selectbox("Repeat", ["", "daily", "weekly"], index=["", "daily", "weekly"].index(e_task.recurrence_interval or ""))
+                    save_task = st.form_submit_button("Save changes")
+                    cancel_task = st.form_submit_button("Cancel")
+                if save_task:
+                    e_task.title = new_title_e.strip()
+                    e_task.duration_minutes = int(new_dur_e)
+                    e_task.priority = new_pri_e
+                    e_task.is_recurring = new_recur_e
+                    e_task.recurrence_interval = new_interval_e if new_recur_e else None
+                    st.session_state.editing_task = None
+                    st.rerun()
+                if cancel_task:
+                    st.session_state.editing_task = None
+                    st.rerun()
     else:
         st.info("No tasks match the current filter.")
 
 # ---------------------------------------------------------------------------
-# Section 4: Generate schedule  →  calls Scheduler.build_schedule()
+# Section 4: Generate schedule
 # ---------------------------------------------------------------------------
 st.divider()
 st.subheader("Generate Today's Schedule")
@@ -167,12 +253,21 @@ if "scheduler" in st.session_state:
         for w in warnings:
             st.warning(w)
 
-    st.markdown("**Mark tasks complete:**")
-    for i, task in enumerate(scheduler.scheduled_tasks):
-        label = f"{task.title} [{task.pet_name}] — {task.duration_minutes} min, {task.priority}"
-        if task.is_recurring:
-            label += f" (repeats {task.recurrence_interval})"
-        checked = st.checkbox(label, value=task.completed, key=f"task_done_{i}")
-        if checked and not task.completed:
-            scheduler.complete_task(task)
-            st.rerun()
+    st.markdown("**Mark tasks complete / remove from schedule:**")
+    for i, task in enumerate(list(scheduler.scheduled_tasks)):
+        col_chk, col_lbl, col_del = st.columns([1, 7, 1])
+        with col_chk:
+            checked = st.checkbox("", value=task.completed, key=f"task_done_{i}")
+            if checked and not task.completed:
+                scheduler.complete_task(task)
+                st.rerun()
+        with col_lbl:
+            label = f"{task.title} [{task.pet_name}] — {task.duration_minutes} min, {task.priority}"
+            if task.is_recurring:
+                label += f" (repeats {task.recurrence_interval})"
+            st.write(label)
+        with col_del:
+            if st.button("Remove", key=f"sched_del_{i}"):
+                scheduler.scheduled_tasks.remove(task)
+                scheduler.skipped_tasks.append(task)
+                st.rerun()
