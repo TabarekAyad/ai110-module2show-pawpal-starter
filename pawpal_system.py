@@ -88,7 +88,11 @@ class Owner:
         return [task for pet in self.pets for task in pet.tasks]
 
     def filter_tasks(self, pet_name: str | None = None, completed: bool | None = None) -> list[Task]:
-        """Return tasks optionally filtered by pet name and/or completion status."""
+        """Return tasks filtered by pet name and/or completion status.
+
+        Pass pet_name to restrict to one pet. Pass completed=False for pending
+        tasks only, or completed=True for done tasks. Omit either to skip that filter.
+        """
         tasks = self.get_all_tasks()
         if pet_name is not None:
             tasks = [t for t in tasks if t.pet_name == pet_name]
@@ -128,7 +132,12 @@ class Scheduler:
         return self.scheduled_tasks
 
     def sort_tasks_by_time(self) -> list[Task]:
-        """Return scheduled tasks ordered by start time (HH:MM), with unwindowed tasks appended last."""
+        """Return scheduled tasks ordered chronologically by start time.
+
+        Tasks with a parseable 'HH:MM-HH:MM' time_window are sorted by their
+        start minute. Tasks with label-style windows (e.g. 'morning') or no
+        window at all are appended at the end.
+        """
         windowed = [t for t in self.scheduled_tasks if t.time_window is not None]
         unwindowed = [t for t in self.scheduled_tasks if t.time_window is None]
         # Sort by parsed start minute so "09:00-10:00" comes before "14:00-15:00".
@@ -139,7 +148,12 @@ class Scheduler:
         ) + unwindowed
 
     def complete_task(self, task: Task) -> None:
-        """Mark a task complete. If it is recurring, add the next occurrence to its pet."""
+        """Mark a task complete and automatically schedule its next occurrence if recurring.
+
+        For daily tasks the next occurrence is due tomorrow; for weekly tasks it
+        is due in 7 days. The new instance is added directly to the pet's task
+        list so it will appear in the next call to build_schedule().
+        """
         task.mark_complete()
         if task.is_recurring and task.pet_name:
             pet = next((p for p in self.owner.pets if p.name == task.pet_name), None)
@@ -183,7 +197,12 @@ class Scheduler:
         return conflicts
 
     def conflict_warnings(self) -> list[str]:
-        """Return a list of plain-language warning strings for every detected conflict. Empty list = no conflicts."""
+        """Return plain-language warning strings for every time-window conflict.
+
+        Wraps detect_conflicts() so callers receive ready-to-display strings
+        rather than raw task tuples. Returns an empty list when there are no
+        conflicts, so it is always safe to iterate without a length check.
+        """
         warnings = []
         for a, b in self.detect_conflicts():
             warnings.append(
