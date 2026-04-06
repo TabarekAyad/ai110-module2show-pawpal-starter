@@ -251,33 +251,51 @@ if st.button("Generate schedule"):
 
 if "scheduler" in st.session_state:
     scheduler: Scheduler = st.session_state.scheduler
-    st.success(f"Schedule built — {scheduler.get_total_time()} min planned.")
 
-    warnings = scheduler.conflict_warnings()
-    if warnings:
-        for w in warnings:
-            st.warning(w)
+    # --- Summary ---
+    total = scheduler.get_total_time()
+    budget = owner.available_minutes_per_day
+    st.success(f"Schedule built — {total} of {budget} min planned ({len(scheduler.scheduled_tasks)} tasks).")
 
-    st.markdown("**Mark tasks complete / remove from schedule:**")
-    for i, task in enumerate(list(scheduler.scheduled_tasks)):
+    # --- Conflict warnings: actionable, not just raw text ---
+    conflict_msgs = scheduler.conflict_warnings()
+    if conflict_msgs:
+        st.error(f"{len(conflict_msgs)} scheduling conflict(s) detected — review and adjust time windows:")
+        for msg in conflict_msgs:
+            # Extract task names for a friendlier message
+            st.warning(msg.replace("WARNING: ", ""))
+
+    # --- Scheduled tasks sorted chronologically ---
+    sorted_schedule = scheduler.sort_tasks_by_time()
+    st.markdown("**Today's plan (sorted by time):**")
+    for i, task in enumerate(sorted_schedule):
         col_chk, col_lbl, col_status, col_del = st.columns([1, 6, 2, 1])
+        # Find original index in scheduled_tasks for stable checkbox key
+        orig_idx = scheduler.scheduled_tasks.index(task)
         with col_chk:
-            checked = st.checkbox("", value=task.completed, key=f"task_done_{i}")
+            checked = st.checkbox("", value=task.completed, key=f"task_done_{orig_idx}")
             if checked and not task.completed:
-                scheduler.complete_task(task)  # marks done; if recurring, adds next occurrence to pet
+                scheduler.complete_task(task)
                 st.rerun()
         with col_lbl:
-            label = f"{task.title} [{task.pet_name}] — {task.duration_minutes} min, {task.priority}"
-            if task.is_recurring:
-                label += f" (repeats {task.recurrence_interval})"
-            st.write(label)
+            window = f" · {task.time_window}" if task.time_window else ""
+            recur = f" · repeats {task.recurrence_interval}" if task.is_recurring else ""
+            st.write(f"**{task.title}** [{task.pet_name}] — {task.duration_minutes} min · {task.priority}{window}{recur}")
         with col_status:
             if task.completed:
-                st.success("Completed: Yes")
+                st.success("Done")
             else:
-                st.warning("Completed: No")
+                st.warning("Pending")
         with col_del:
-            if st.button("Remove", key=f"sched_del_{i}"):
+            if st.button("Remove", key=f"sched_del_{orig_idx}"):
                 scheduler.scheduled_tasks.remove(task)
                 scheduler.skipped_tasks.append(task)
                 st.rerun()
+
+    # --- Skipped tasks ---
+    if scheduler.skipped_tasks:
+        with st.expander(f"Skipped tasks ({len(scheduler.skipped_tasks)} — didn't fit in time budget)"):
+            st.table([
+                {"task": t.title, "pet": t.pet_name, "duration (min)": t.duration_minutes, "priority": t.priority}
+                for t in scheduler.skipped_tasks
+            ])
