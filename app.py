@@ -184,21 +184,26 @@ else:
 
     if filtered:
         st.write("**Tasks:**")
-        for task in filtered:
+        for idx, task in enumerate(filtered):
             pet_obj = next((p for p in owner.pets if p.name == task.pet_name), None)
-            col_t, col_info, col_edit, col_del = st.columns([2, 4, 1, 1])
+            col_t, col_info, col_done, col_edit, col_del = st.columns([2, 4, 2, 1, 1])
             with col_t:
                 st.write(f"**{task.title}**")
             with col_info:
                 recur = f" · repeats {task.recurrence_interval}" if task.is_recurring else ""
                 st.write(f"{task.pet_name} · {task.duration_minutes} min · {task.priority}{recur}")
+            with col_done:
+                if task.completed:
+                    st.success("Completed: Yes")
+                else:
+                    st.warning("Completed: No")
             with col_edit:
-                if st.button("Edit", key=f"edit_task_{task.pet_name}_{task.title}"):
+                if st.button("Edit", key=f"edit_task_{idx}"):
                     st.session_state.editing_task = (task.pet_name, task.title)
             with col_del:
-                if st.button("Delete", key=f"del_task_{task.pet_name}_{task.title}"):
+                if st.button("Delete", key=f"del_task_{idx}"):
                     if pet_obj:
-                        pet_obj.tasks = [t for t in pet_obj.tasks if t.title != task.title]
+                        pet_obj.tasks = [t for t in pet_obj.tasks if t is not task]
                     st.rerun()
 
         if st.session_state.editing_task:
@@ -255,17 +260,22 @@ if "scheduler" in st.session_state:
 
     st.markdown("**Mark tasks complete / remove from schedule:**")
     for i, task in enumerate(list(scheduler.scheduled_tasks)):
-        col_chk, col_lbl, col_del = st.columns([1, 7, 1])
+        col_chk, col_lbl, col_status, col_del = st.columns([1, 6, 2, 1])
         with col_chk:
             checked = st.checkbox("", value=task.completed, key=f"task_done_{i}")
             if checked and not task.completed:
-                scheduler.complete_task(task)
+                scheduler.complete_task(task)  # marks done; if recurring, adds next occurrence to pet
                 st.rerun()
         with col_lbl:
             label = f"{task.title} [{task.pet_name}] — {task.duration_minutes} min, {task.priority}"
             if task.is_recurring:
                 label += f" (repeats {task.recurrence_interval})"
             st.write(label)
+        with col_status:
+            if task.completed:
+                st.success("Completed: Yes")
+            else:
+                st.warning("Completed: No")
         with col_del:
             if st.button("Remove", key=f"sched_del_{i}"):
                 scheduler.scheduled_tasks.remove(task)

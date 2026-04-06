@@ -51,6 +51,39 @@ Tasks marked as `daily` or `weekly` automatically generate their next occurrence
 **Lightweight conflict detection**
 `conflict_warnings()` checks all scheduled tasks for overlapping time windows using numeric minute-based comparison (not string matching). It returns a list of human-readable warning strings — never crashes, always safe to iterate.
 
+## Testing PawPal+
+
+### Run the tests
+
+```bash
+python -m pytest
+```
+
+Or for verbose output with individual test names:
+
+```bash
+python -m pytest -v
+```
+
+### What the tests cover
+
+The test suite in `tests/test_pawpal.py` contains 24 tests across six categories:
+
+| Category | What is verified |
+|---|---|
+| **Task basics** | `mark_complete()` flips `completed` to `True`; adding a task increases the pet's task count |
+| **Sorting** | Tasks with `HH:MM-HH:MM` windows are returned in chronological order; unwindowed tasks appear last; high-priority tasks are always scheduled before lower ones; equal-priority tasks tie-break by shortest duration first |
+| **Recurrence** | Completing a daily task creates one new pending instance with `due_date = today + 1`; weekly tasks get `due_date = today + 7`; completing a recurring task twice creates two separate occurrences; completing a non-recurring task creates nothing; completed tasks never re-enter a rebuilt schedule |
+| **Conflict detection** | Exact same window is flagged; overlapping windows (e.g. `08:00-09:00` vs `08:30-08:45`) are flagged; non-overlapping windows are not; `conflict_warnings()` returns formatted warning strings |
+| **Filtering** | `filter_tasks()` returns only the specified pet's tasks; filters by `completed` status; both filters applied simultaneously; unknown pet name returns an empty list |
+| **Edge cases** | Pet with no tasks returns an empty schedule without crashing; all tasks exceeding the time budget are moved to `skipped_tasks`; already-completed tasks are excluded from the schedule |
+
+### Confidence level
+
+**4 / 5 stars**
+
+The core logic — scheduling, sorting, filtering, recurrence, and conflict detection — is thoroughly tested with 24 passing tests. One star is withheld because time windows are optional in the UI (users can add tasks without them), which limits the real-world effectiveness of `sort_tasks_by_time()` and `detect_conflicts()` for tasks entered through the app. Adding a time window input field to the UI would close this gap.
+
 ### Suggested workflow
 
 1. Read the scenario carefully and identify requirements and edge cases.
